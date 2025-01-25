@@ -185,35 +185,35 @@ MeshSubset SimplicialComplexOperators::star(const MeshSubset& subset) const {
     MeshSubset result = subset.deepCopy();
 
     for (auto edgeIdx: subset.edges) {
-        auto startingIdx_A1 = A1.outerIndexPtr()[edgeIdx];
-        auto endingIdx_A1 = A1.outerIndexPtr()[edgeIdx+1];
+        size_t startingIdx_A1 = A1.outerIndexPtr()[edgeIdx];
+        size_t endingIdx_A1 = A1.outerIndexPtr()[edgeIdx+1];
         for (size_t j=startingIdx_A1; j<endingIdx_A1; j++) {
-            auto faceIdx = A1.innerIndexPtr()[j];
-            result.addFace(j);
+            size_t faceIdx = A1.innerIndexPtr()[j];
+            result.addFace(faceIdx);
         }
     }
 
     for (auto vertexIdx: subset.vertices) {
         // add edges containing the vertex to the result
-        auto startingIdx_A0 = A0.outerIndexPtr()[vertexIdx];
-        auto endingIdx_A0 = A0.outerIndexPtr()[vertexIdx+1];
+        size_t startingIdx_A0 = A0.outerIndexPtr()[vertexIdx];
+        size_t endingIdx_A0 = A0.outerIndexPtr()[vertexIdx+1];
         for (size_t i=startingIdx_A0; i<endingIdx_A0; i++) {
-            auto edgeIdx = A0.innerIndexPtr()[i];
+            size_t edgeIdx = A0.innerIndexPtr()[i];
             // skip if the edge is in the original subset since it has already been checked
             if (subset.edges.count(edgeIdx)) continue;
             
             result.addEdge(edgeIdx);
 
             // add faces containing the edge (hence containing the vertex) to the result
-            auto startingIdx_A1 = A1.outerIndexPtr()[edgeIdx];
-            auto endingIdx_A1 = A1.outerIndexPtr()[edgeIdx+1];
+            size_t startingIdx_A1 = A1.outerIndexPtr()[edgeIdx];
+            size_t endingIdx_A1 = A1.outerIndexPtr()[edgeIdx+1];
             for (size_t j=startingIdx_A1; j<endingIdx_A1; j++) {
                 auto faceIdx = A1.innerIndexPtr()[j];
-                result.addFace(j);
+                result.addFace(faceIdx);
             }
         }
     }
-    return subset; // placeholder
+    return result; // placeholder
 }
 
 
@@ -229,19 +229,36 @@ MeshSubset SimplicialComplexOperators::closure(const MeshSubset& subset) const {
     MeshSubset result = subset.deepCopy();
 
     // face
-    for (size_t face=0; face<A1.rows(); face++) {
-        if (subset.faces.count(face)) {
-            auto startingIdx_A1 = A1.outerIndexPtr()[face];
-            auto endingIdx_A1 = A1.outerIndexPtr()[face+1];
+    std::vector<size_t> A1ColumnIndex(A1.nonZeros());
+    std::vector<size_t> A0ColumnIndex(A0.nonZeros());
+    // A1 column indices
+    size_t outerIndex = 0;
+    for (size_t innerIndex=0; innerIndex<A1.nonZeros(); innerIndex++) {
+        if (innerIndex == A1.outerIndexPtr()[outerIndex+1]) outerIndex += 1;
+        A1ColumnIndex[innerIndex] = outerIndex;
+    }
+    // A0 column indices
+    outerIndex = 0;
+    for (size_t innerIndex=0; innerIndex<A0.nonZeros(); innerIndex++) {
+        if (innerIndex == A0.outerIndexPtr()[outerIndex+1]) outerIndex += 1;
+        A0ColumnIndex[innerIndex] = outerIndex;
+    }
+
+    for (size_t faceEdgeIndex=0; faceEdgeIndex<A1.nonZeros(); faceEdgeIndex++) {
+        size_t faceIdx = A1.innerIndexPtr()[faceEdgeIndex];
+        size_t edgeIdx = A1ColumnIndex[faceEdgeIndex];
+        if (subset.faces.count(faceIdx)) {
+            result.addEdge(edgeIdx);
+            for (size_t edgeVertexIndex=0; edgeVertexIndex<A0.nonZeros(); edgeVertexIndex++) {
+                if (A0.innerIndexPtr()[edgeVertexIndex] == edgeIdx) result.addVertex(A0ColumnIndex[edgeVertexIndex]);
+            }
         }
     }
 
-    for (auto edgeIdx: subset.edges) {
-        auto startingIdx_A1 = A1.outerIndexPtr()[edgeIdx];
-        auto endingIdx_A1 = A1.outerIndexPtr()[edgeIdx+1];
-        for (size_t j=startingIdx_A1; j<endingIdx_A1; j++) {
-            auto faceIdx = A1.innerIndexPtr()[j];
-            result.addFace(j);
+    // edge
+    for (size_t edgeIdx: subset.edges) {
+        for (size_t edgeVertexIndex=0; edgeVertexIndex<A0.nonZeros(); edgeVertexIndex++) {
+            if (A0.innerIndexPtr()[edgeVertexIndex] == edgeIdx) result.addVertex(A0ColumnIndex[edgeVertexIndex]);
         }
     }
 
@@ -257,7 +274,11 @@ MeshSubset SimplicialComplexOperators::closure(const MeshSubset& subset) const {
 MeshSubset SimplicialComplexOperators::link(const MeshSubset& subset) const {
 
     // TODO
-    return subset; // placeholder
+    // closure of star minus star of closure
+    auto starOfClosure = star(closure(subset));
+    auto result = closure(star(subset));
+    result.deleteSubset(starOfClosure);
+    return result; // placeholder
 }
 
 /*
@@ -269,7 +290,37 @@ MeshSubset SimplicialComplexOperators::link(const MeshSubset& subset) const {
 bool SimplicialComplexOperators::isComplex(const MeshSubset& subset) const {
 
     // TODO
-    return false; // placeholder
+    // face
+    std::vector<size_t> A1ColumnIndex(A1.nonZeros());
+    std::vector<size_t> A0ColumnIndex(A0.nonZeros());
+    // A1 column indices
+    size_t outerIndex = 0;
+    for (size_t innerIndex=0; innerIndex<A1.nonZeros(); innerIndex++) {
+        if (innerIndex == A1.outerIndexPtr()[outerIndex+1]) outerIndex += 1;
+        A1ColumnIndex[innerIndex] = outerIndex;
+    }
+    // A0 column indices
+    outerIndex = 0;
+    for (size_t innerIndex=0; innerIndex<A0.nonZeros(); innerIndex++) {
+        if (innerIndex == A0.outerIndexPtr()[outerIndex+1]) outerIndex += 1;
+        A0ColumnIndex[innerIndex] = outerIndex;
+    }
+
+    // for each face, the edges should also be in the subset
+    for (size_t faceEdgeIndex=0; faceEdgeIndex<A1.nonZeros(); faceEdgeIndex++) {
+        size_t faceIdx = A1.innerIndexPtr()[faceEdgeIndex];
+        size_t edgeIdx = A1ColumnIndex[faceEdgeIndex];
+        if (subset.faces.count(faceIdx) && !subset.edges.count(edgeIdx)) return false;
+    }
+
+    // for each edge, the vertices should also be in the subset
+    for (size_t edgeVertexIndex=0; edgeVertexIndex<A0.nonZeros(); edgeVertexIndex++) {
+        size_t edgeIdx = A0.innerIndexPtr()[edgeVertexIndex];
+        size_t vertexIdx = A0ColumnIndex[edgeVertexIndex];
+        if (subset.edges.count(edgeIdx) && !subset.vertices.count(vertexIdx)) return false; 
+    }
+
+    return true; // placeholder
 }
 
 /*
@@ -282,7 +333,70 @@ bool SimplicialComplexOperators::isComplex(const MeshSubset& subset) const {
 int SimplicialComplexOperators::isPureComplex(const MeshSubset& subset) const {
 
     // TODO
-    return -1; // placeholder
+    if (!isComplex(subset)) return -1;
+    else if (
+        subset.vertices.empty() && 
+        subset.edges.empty() && 
+        subset.faces.empty()
+    ) return -1;
+    else if (
+        !subset.vertices.empty() &&
+        subset.edges.empty() && 
+        subset.faces.empty()
+    ) return 0;
+    else if (
+        !subset.vertices.empty() &&
+        !subset.edges.empty() && 
+        subset.faces.empty()
+    ) {
+        // check if each 0-simplex contained in an edge
+        for (auto vertexIdx: subset.vertices) {
+            auto startingIdx_A0 = A0.outerIndexPtr()[vertexIdx];
+            auto endingIdx_A0 = A0.outerIndexPtr()[vertexIdx+1];
+            bool containedByEdge = false;
+            for (size_t i=startingIdx_A0; i<endingIdx_A0; i++) {
+                auto edgeIdx = A0.innerIndexPtr()[i];
+                if (subset.edges.count(edgeIdx)) {
+                    containedByEdge = true;
+                    break;
+                }
+            }
+            if (!containedByEdge) return -1;
+        }
+        return 1;
+    }
+    else {
+        // check if each 0-simplex contained in an edge
+        for (auto vertexIdx: subset.vertices) {
+            auto startingIdx_A0 = A0.outerIndexPtr()[vertexIdx];
+            auto endingIdx_A0 = A0.outerIndexPtr()[vertexIdx+1];
+            bool containedByEdge = false;
+            for (size_t i=startingIdx_A0; i<endingIdx_A0; i++) {
+                auto edgeIdx = A0.innerIndexPtr()[i];
+                if (subset.edges.count(edgeIdx)) {
+                    containedByEdge = true;
+                    break;
+                }
+            }
+            if (!containedByEdge) return -1;
+        }
+
+        // check if each 1-simplex contained
+        for (auto edgeIdx: subset.edges) {
+            auto startingIdx_A1 = A1.outerIndexPtr()[edgeIdx];
+            auto endingIdx_A1 = A1.outerIndexPtr()[edgeIdx+1];
+            bool containedByFace = false;
+            for (size_t i=startingIdx_A1; i<endingIdx_A1; i++) {
+                auto faceIdx = A1.innerIndexPtr()[i];
+                if (subset.faces.count(faceIdx)) {
+                    containedByFace = true;
+                    break;
+                }
+            }
+            if (!containedByFace) return -1;
+        }
+        return 2;
+    }
 }
 
 /*
@@ -294,5 +408,52 @@ int SimplicialComplexOperators::isPureComplex(const MeshSubset& subset) const {
 MeshSubset SimplicialComplexOperators::boundary(const MeshSubset& subset) const {
 
     // TODO
-    return subset; // placeholder
+    int pureComplexDegree = isPureComplex(subset);
+    switch (pureComplexDegree) {
+    case -1: {
+        // not defined
+        return MeshSubset();
+    }
+    case 0: {
+        // null set
+        return MeshSubset();
+    }
+    case 1: {
+        // vertices that is only contained by one edge
+        MeshSubset result({}, {}, {});
+        for (auto vertexIdx: subset.vertices) {
+            auto startingIdx_A0 = A0.outerIndexPtr()[vertexIdx];
+            auto endingIdx_A0 = A0.outerIndexPtr()[vertexIdx+1];
+            int numberOfConnectingEdges = 0;
+            for (auto i=startingIdx_A0; i<endingIdx_A0; i++) {
+                auto edgeIdx = A0.innerIndexPtr()[i];
+                if (subset.edges.count(edgeIdx)) {
+                    numberOfConnectingEdges += 1;
+                }
+            }
+            if (numberOfConnectingEdges == 1) result.addVertex(vertexIdx);
+        }
+        return result;
+    }
+    case 2: {
+        MeshSubset result({}, {}, {});
+        for (auto edgeIdx: subset.edges) {
+            auto startingIdx_A1 = A1.outerIndexPtr()[edgeIdx];
+            auto endingIdx_A1 = A1.outerIndexPtr()[edgeIdx+1];
+            int numberOfConnectingFaces = 0;
+            for (auto i=startingIdx_A1; i<endingIdx_A1; i++) {
+                auto faceIdx = A1.innerIndexPtr()[i];
+                if (subset.faces.count(faceIdx)) {
+                    numberOfConnectingFaces += 1;
+                }
+            }
+            if (numberOfConnectingFaces == 1) result.addEdge(edgeIdx);
+        }
+        result = closure(result);
+        return result;
+    }
+    default: {
+        return MeshSubset();
+    }
+    }
 }
