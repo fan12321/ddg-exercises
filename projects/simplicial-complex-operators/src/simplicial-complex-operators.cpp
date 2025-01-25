@@ -125,12 +125,10 @@ SparseMatrix<size_t> SimplicialComplexOperators::buildFaceEdgeAdjacencyMatrix() 
 Vector<size_t> SimplicialComplexOperators::buildVertexVector(const MeshSubset& subset) const {
 
     // TODO
-    size_t length = subset.vertices.size();
+    size_t length = A0.cols();
     Vector<size_t> result(length);
-    size_t vectorIdx = 0;
-    for (auto vertexIdx: subset.vertices) {
-        result[vectorIdx] = vertexIdx;
-        vectorIdx += 1;
+    for (auto i=0; i<length; i++) {
+        result[i] = subset.vertices.count(i);
     }
     return result;
 }
@@ -144,12 +142,10 @@ Vector<size_t> SimplicialComplexOperators::buildVertexVector(const MeshSubset& s
 Vector<size_t> SimplicialComplexOperators::buildEdgeVector(const MeshSubset& subset) const {
 
     // TODO
-    size_t length = subset.edges.size();
+    size_t length = A1.cols();
     Vector<size_t> result(length);
-    size_t vectorIdx = 0;
-    for (auto edgeIdx: subset.edges) {
-        result[vectorIdx] = edgeIdx;
-        vectorIdx += 1;
+    for (auto i=0; i<length; i++) {
+        result[i] = subset.edges.count(i);
     }
     return result;
 }
@@ -163,12 +159,10 @@ Vector<size_t> SimplicialComplexOperators::buildEdgeVector(const MeshSubset& sub
 Vector<size_t> SimplicialComplexOperators::buildFaceVector(const MeshSubset& subset) const {
 
     // TODO
-    size_t length = subset.faces.size();
+    size_t length = A1.rows();
     Vector<size_t> result(length);
-    size_t vectorIdx = 0;
-    for (auto faceIdx: subset.faces) {
-        result[vectorIdx] = faceIdx;
-        vectorIdx += 1;
+    for (auto i=0; i<length; i++) {
+        result[i] = subset.faces.count(i);
     }
     return result;
 }
