@@ -81,7 +81,22 @@ double VertexPositionGeometry::totalArea() const {
 double VertexPositionGeometry::cotan(Halfedge he) const {
 
     // TODO
-    return 0; // placeholder
+    Vertex a = he.next().tipVertex();
+    Vertex b = he.tipVertex();
+    Vertex c = he.tailVertex();
+
+    Vector3 e1 = inputVertexPositions[b] - inputVertexPositions[a];
+    Vector3 e2 = inputVertexPositions[c] - inputVertexPositions[a];
+
+    double crossProduct = sqrt(
+        (e1.y*e2.z - e1.z*e2.y) * (e1.y*e2.z - e1.z*e2.y) + 
+        (e1.x*e2.z - e1.z*e2.x) * (e1.x*e2.z - e1.z*e2.x) + 
+        (e1.x*e2.y - e1.y*e2.x) * (e1.x*e2.y - e1.y*e2.x)
+    );
+
+    double dotProduct = e1.x*e2.x + e1.y*e2.y + e1.z*e2.z;
+
+    return dotProduct / crossProduct;
 }
 
 /*
@@ -93,7 +108,27 @@ double VertexPositionGeometry::cotan(Halfedge he) const {
 double VertexPositionGeometry::barycentricDualArea(Vertex v) const {
 
     // TODO
-    return 0; // placeholder
+    auto heList = v.incomingHalfedges();
+    double result = 0.0;
+    for (auto he: heList) {
+        Vertex a = he.tailVertex();
+        Vertex b = he.tipVertex();
+        Vertex c = he.next().tipVertex();
+
+        Vector3 e1 = inputVertexPositions[b] - inputVertexPositions[a];
+        Vector3 e2 = inputVertexPositions[c] - inputVertexPositions[a];
+
+        double crossProduct = sqrt(
+            (e1.y*e2.z - e1.z*e2.y) * (e1.y*e2.z - e1.z*e2.y) + 
+            (e1.x*e2.z - e1.z*e2.x) * (e1.x*e2.z - e1.z*e2.x) + 
+            (e1.x*e2.y - e1.y*e2.x) * (e1.x*e2.y - e1.y*e2.x)
+        );
+
+        result += crossProduct;
+    }
+    result /= 6.0;
+
+    return result;
 }
 
 /*
